@@ -1,32 +1,3 @@
-# FinWise
-
-A minimal, cross-platform personal finance tracker built with React Native, Expo, and SQLite.
-
----
-
-## Features
-
-- 🌑 Light and Dark Mode support
-- 👤 Personalized greetings
-- ➕ Quick add transactions via floating button
-- 📈 Tracks income, expenses, and investments
-- 🧮 Automatic balance calculation
-- 🔄 Swipe to edit/delete transactions
-- 🎨 Beautiful, minimal UI
-- ⚡ Works fully offline (no bank sync required)
-
----
-
-## Screens
-
-- **Home:** Greeting, balance, and insights
-- **Transactions:** All your financial history, with swipe actions and editing
-- **Categories:** Organize spending (coming soon)
-- **Recurring:** Manage repeating payments (coming soon)
-- **Settings:** Toggle light/dark mode, customize app
-
----
-
 ## Getting Started
 
 ```bash
@@ -39,25 +10,34 @@ npm install
 
 # Start the app with Expo
 npx expo start
-## Technologies
+Technologies
+React Native + Expo
 
-- React Native + Expo
-- TypeScript
-- SQLite (via expo-sqlite)
-- React Navigation
-- @expo/vector-icons
+TypeScript
 
-## Contributing
+SQLite (via expo-sqlite)
 
-Pull requests welcome!  
+React Navigation
+
+@expo/vector-icons
+
+Contributing
+Pull requests welcome!
 If you find a bug or want a new feature, open an issue.
 
-## License
-
+License
 MIT
+
+Made with 💸 by Alex
+
+yaml
+Copy
+Edit
 
 ---
 
-_Made with 💸 by Alex_
+**Quick tip:**  
+- Only use triple backticks (\`\`\`) for code, **not** for normal text or bullet lists!
 
-
+You’re good to go!  
+If you want a final copy-paste full README (with all sections, properly formatted), just ask!
