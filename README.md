@@ -39,5 +39,25 @@ npm install
 
 # Start the app with Expo
 npx expo start
+## Technologies
+
+- React Native + Expo
+- TypeScript
+- SQLite (via expo-sqlite)
+- React Navigation
+- @expo/vector-icons
+
+## Contributing
+
+Pull requests welcome!  
+If you find a bug or want a new feature, open an issue.
+
+## License
+
+MIT
+
+---
+
+_Made with 💸 by Alex_
 
 
