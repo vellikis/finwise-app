@@ -1,10 +1,10 @@
-// screens/RecurringScreen.tsx
+// screens/BudgetsScreen.tsx
 import React, {
 	useCallback,
 	useEffect,
-	useLayoutEffect,
 	useMemo,
 	useState,
+	useLayoutEffect,
 } from "react";
 import {
 	View,
@@ -35,14 +35,39 @@ import { useIsFocused } from "@react-navigation/native";
 
 import { useTheme } from "../theme";
 import {
-	RecurringRule,
-	RecurringFrequency,
-	getRecurringRules,
-	createRecurringRule,
-	updateRecurringRule,
-	deleteRecurringRule,
-	materializeRecurring,
+	Budget,
+	BudgetPeriod,
+	getBudgets,
+	createBudget,
+	updateBudget,
+	deleteBudget,
+	getTransactions,
+	Transaction,
 } from "../database";
+
+// --- tiny progress bar component ---
+function Progress({ value, max }: { value: number; max: number }) {
+	const theme = useTheme();
+	const pct = Math.max(0, Math.min(1, max ? value / max : 0));
+	return (
+		<View
+			style={{
+				height: 10,
+				borderRadius: 8,
+				backgroundColor: theme.border,
+				overflow: "hidden",
+			}}
+		>
+			<View
+				style={{
+					width: `${pct * 100}%`,
+					height: "100%",
+					backgroundColor: pct >= 1 ? theme.expense : theme.primary1,
+				}}
+			/>
+		</View>
+	);
+}
 
 // --- date helpers ---
 function startOfDay(d: Date) {
@@ -53,62 +78,97 @@ function addDays(d: Date, n: number) {
 	x.setDate(x.getDate() + n);
 	return x;
 }
-function addWeeks(d: Date, n: number) {
-	return addDays(d, 7 * n);
+function daysBetween(a: Date, b: Date) {
+	return Math.floor(
+		(startOfDay(b).getTime() - startOfDay(a).getTime()) / 86400000
+	);
 }
-function addMonths(d: Date, n: number) {
-	const x = new Date(d);
-	x.setMonth(x.getMonth() + n);
-	return x;
+function monthDays(year: number, monthIndex: number) {
+	return new Date(year, monthIndex + 1, 0).getDate();
 }
-function stepDate(freq: RecurringFrequency, d: Date) {
-	return freq === "daily"
-		? addDays(d, 1)
-		: freq === "weekly"
-		? addWeeks(d, 1)
-		: addMonths(d, 1);
+function clampDay(y: number, m: number, day: number) {
+	return Math.min(day, monthDays(y, m));
 }
 
-/** Compute the next due date (>= today) for a rule */
-function nextDue(rule: RecurringRule, now = new Date()): Date {
+/** Current cycle window from anchor */
+function getCurrentWindow(
+	b: Budget,
+	now = new Date()
+): { from: Date; to: Date } {
+	const anchor = startOfDay(new Date(b.startDate));
 	const today = startOfDay(now);
-	const anchor = startOfDay(new Date(rule.startDate));
-	const last = rule.lastRun ? startOfDay(new Date(rule.lastRun)) : null;
-	let cursor = last ? stepDate(rule.frequency, last) : anchor;
-	if (cursor < anchor) cursor = anchor;
-	while (cursor < today) cursor = stepDate(rule.frequency, cursor);
-	return cursor;
+
+	if (b.period === "weekly") {
+		const diff = daysBetween(anchor, today);
+		const k = diff >= 0 ? Math.floor(diff / 7) : Math.floor((diff - 6) / 7);
+		const from = addDays(anchor, k * 7);
+		const to = addDays(from, 6);
+		return { from, to };
+	}
+
+	// monthly
+	const anchorDay = anchor.getDate();
+	const y = today.getFullYear();
+	const m = today.getMonth();
+	let startYear = y;
+	let startMonth = m;
+	const todayDay = today.getDate();
+
+	if (todayDay < anchorDay) {
+		if (m === 0) {
+			startYear = y - 1;
+			startMonth = 11;
+		} else {
+			startMonth = m - 1;
+		}
+	}
+
+	const cycleStartDay = clampDay(startYear, startMonth, anchorDay);
+	const from = new Date(startYear, startMonth, cycleStartDay);
+
+	let endYear = startYear;
+	let endMonth = startMonth + 1;
+	if (endMonth > 11) {
+		endMonth = 0;
+		endYear += 1;
+	}
+	const nextStartDay = clampDay(endYear, endMonth, anchorDay);
+	const nextStart = new Date(endYear, endMonth, nextStartDay);
+	const to = addDays(nextStart, -1);
+
+	return { from, to };
 }
 
-export default function RecurringScreen({ navigation }: any) {
-	const theme = useTheme();
+export default function BudgetsScreen({ navigation }: any) {
 	const insets = useSafeAreaInsets();
+	const theme = useTheme();
 	const isFocused = useIsFocused();
 
 	useLayoutEffect(() => {
 		navigation?.setOptions?.({ headerShown: false });
 	}, [navigation]);
 
-	const [rules, setRules] = useState<RecurringRule[]>([]);
+	const [budgets, setBudgets] = useState<Budget[]>([]);
+	const [transactions, setTransactions] = useState<Transaction[]>([]);
 	const [refreshing, setRefreshing] = useState(false);
 
-	// modal state
 	const [showModal, setShowModal] = useState(false);
-	const [editing, setEditing] = useState<RecurringRule | null>(null);
-	const [fType, setFType] = useState<"income" | "expense">("expense");
-	const [fAmount, setFAmount] = useState("");
-	const [fCategory, setFCategory] = useState("");
-	const [fFreq, setFFreq] = useState<RecurringFrequency>("monthly");
-	const [fStartDate, setFStartDate] = useState(new Date());
+	const [editing, setEditing] = useState<Budget | null>(null);
 
-	// iOS inline date wheel toggle
-	const [showDatePicker, setShowDatePicker] = useState(false);
+	// form state
+	const [fCategory, setFCategory] = useState("");
+	const [fAmount, setFAmount] = useState("");
+	const [fPeriod, setFPeriod] = useState<BudgetPeriod>("monthly");
+	const [fStartDate, setFStartDate] = useState(new Date());
+	const [showDatePicker, setShowDatePicker] = useState(false); // iOS inline toggle
 
 	const load = useCallback(async () => {
-		const r = await getRecurringRules();
-		setRules(r);
+		const [b, tx] = await Promise.all([getBudgets(), getTransactions()]);
+		setBudgets(b);
+		setTransactions(tx);
 	}, []);
 
+	// Load on focus
 	useEffect(() => {
 		if (isFocused) load();
 	}, [isFocused, load]);
@@ -119,23 +179,56 @@ export default function RecurringScreen({ navigation }: any) {
 		setRefreshing(false);
 	}, [load]);
 
+	// computed spend per budget (case-insensitive category match)
+	const computed = useMemo(() => {
+		const byId = new Map<number, { spent: number; from: Date; to: Date }>();
+		const now = new Date();
+
+		for (const b of budgets) {
+			const { from, to } = getCurrentWindow(b, now);
+			const spent = transactions
+				.filter(
+					t =>
+						t.type === "expense" &&
+						t.category?.trim().toLowerCase() === b.category.trim().toLowerCase()
+				)
+				.filter(t => {
+					const d = new Date(t.date);
+					return (
+						d >= from &&
+						d <=
+							new Date(
+								to.getFullYear(),
+								to.getMonth(),
+								to.getDate(),
+								23,
+								59,
+								59
+							)
+					);
+				})
+				.reduce((acc, t) => acc + (t.amount || 0), 0);
+
+			byId.set(b.id, { spent, from, to });
+		}
+		return byId;
+	}, [budgets, transactions]);
+
 	const openCreate = () => {
 		setEditing(null);
-		setFType("expense");
-		setFAmount("");
 		setFCategory("");
-		setFFreq("monthly");
+		setFAmount("");
+		setFPeriod("monthly");
 		setFStartDate(new Date());
 		setShowModal(true);
 	};
 
-	const openEdit = (r: RecurringRule) => {
-		setEditing(r);
-		setFType(r.type);
-		setFAmount(String(r.amount));
-		setFCategory(r.category);
-		setFFreq(r.frequency);
-		setFStartDate(new Date(r.startDate));
+	const openEdit = (b: Budget) => {
+		setEditing(b);
+		setFCategory(b.category);
+		setFAmount(String(b.amount));
+		setFPeriod(b.period);
+		setFStartDate(new Date(b.startDate));
 		setShowModal(true);
 	};
 
@@ -145,54 +238,42 @@ export default function RecurringScreen({ navigation }: any) {
 			return Alert.alert("Validation", "Please enter a category.");
 		if (!amount || amount <= 0)
 			return Alert.alert("Validation", "Amount must be a positive number.");
-		const iso = startOfDay(fStartDate).toISOString();
 
+		const iso = fStartDate.toISOString();
 		if (editing) {
-			await updateRecurringRule(
-				editing.id,
-				fType,
-				amount,
-				fCategory.trim(),
-				iso,
-				fFreq
-			);
+			await updateBudget(editing.id, fCategory.trim(), amount, fPeriod, iso);
 		} else {
-			await createRecurringRule(fType, amount, fCategory.trim(), iso, fFreq);
+			await createBudget(fCategory.trim(), amount, fPeriod, iso);
 		}
 		setShowModal(false);
-		await materializeRecurring(); // post anything due right away
-		await load();
+		await load(); // refresh list immediately
 	};
 
-	const confirmDelete = (r: RecurringRule) => {
-		Alert.alert("Delete rule", `Delete "${r.category}" ${r.frequency}?`, [
+	const confirmDelete = (b: Budget) => {
+		Alert.alert("Delete budget", `Delete budget for "${b.category}"?`, [
 			{ text: "Cancel", style: "cancel" },
 			{
 				text: "Delete",
 				style: "destructive",
 				onPress: async () => {
-					await deleteRecurringRule(r.id);
+					await deleteBudget(b.id);
 					await load();
 				},
 			},
 		]);
 	};
 
-	const runDueNow = async () => {
-		await materializeRecurring();
-		await load();
-	};
-
+	// Dismiss keyboard before opening date picker
 	const openDatePicker = () => {
 		Keyboard.dismiss();
-		setShowDatePicker(true); // show inline spinner on iOS, dialog on Android
+		setShowDatePicker(true); // iOS inline; Android dialog
 	};
 
-	const renderItem = ({ item }: { item: RecurringRule }) => {
-		const due = nextDue(item);
-		const today = startOfDay(new Date());
-		const dueLabel =
-			due.getTime() === today.getTime() ? "Today" : due.toLocaleDateString();
+	const renderItem = ({ item }: { item: Budget }) => {
+		const info = computed.get(item.id);
+		const spent = info?.spent ?? 0;
+		const remaining = item.amount - spent;
+		const over = remaining < 0;
 
 		return (
 			<TouchableOpacity
@@ -208,116 +289,51 @@ export default function RecurringScreen({ navigation }: any) {
 					>
 						{item.category}
 					</Text>
-					<Text
-						style={{
-							color: item.type === "income" ? theme.income : theme.expense,
-							fontWeight: "900",
-						}}
-					>
-						{item.type === "income" ? "+" : "-"}€{item.amount.toFixed(2)}
+					<Text style={[styles.cardAmount, { color: theme.textSecondary }]}>
+						€{item.amount.toFixed(2)}
 					</Text>
 				</View>
 
-				<View style={styles.badgeRow}>
-					<View
-						style={[
-							styles.badge,
-							{ borderColor: theme.border, backgroundColor: theme.background },
-						]}
-					>
-						<Ionicons
-							name="time-outline"
-							size={14}
-							color={theme.textSecondary}
-						/>
-						<Text
-							style={{
-								marginLeft: 6,
-								color: theme.textSecondary,
-								fontWeight: "700",
-							}}
-						>
-							{item.frequency[0].toUpperCase() + item.frequency.slice(1)}
-						</Text>
-					</View>
-					<View
-						style={[
-							styles.badge,
-							{ borderColor: theme.border, backgroundColor: theme.background },
-						]}
-					>
-						<Ionicons
-							name="calendar-outline"
-							size={14}
-							color={theme.textSecondary}
-						/>
-						<Text style={{ marginLeft: 6, color: theme.textSecondary }}>
-							Anchor: {new Date(item.startDate).toLocaleDateString()}
-						</Text>
-					</View>
-					<View
-						style={[
-							styles.badge,
-							{ borderColor: theme.border, backgroundColor: theme.background },
-						]}
-					>
-						<Ionicons
-							name="notifications-outline"
-							size={14}
-							color={theme.textSecondary}
-						/>
-						<Text style={{ marginLeft: 6, color: theme.textSecondary }}>
-							Next due: {dueLabel}
-						</Text>
-					</View>
+				<View style={{ marginVertical: 10 }}>
+					<Progress value={spent} max={item.amount} />
 				</View>
 
-				{!!item.lastRun && (
+				<View style={styles.cardRow}>
+					<Text style={{ color: theme.textSecondary }}>
+						Spent:{" "}
+						<Text style={{ color: over ? theme.expense : theme.text }}>
+							€{spent.toFixed(2)}
+						</Text>
+					</Text>
+					<Text style={{ color: over ? theme.expense : theme.textSecondary }}>
+						{over ? "Over by" : "Remaining"}: €{Math.abs(remaining).toFixed(2)}
+					</Text>
+				</View>
+
+				{info && (
 					<Text
 						style={{ marginTop: 6, fontSize: 12, color: theme.textSecondary }}
 					>
-						Last posted: {new Date(item.lastRun).toLocaleDateString()}
+						{item.period === "weekly" ? "This week" : "This month"} •{" "}
+						{info.from.toLocaleDateString()} – {info.to.toLocaleDateString()}
 					</Text>
 				)}
 			</TouchableOpacity>
 		);
 	};
 
-	// List header component: controls bar under the gradient header
+	// Controls row (below header) — one big purple button
 	const ListControls = (
 		<View style={styles.controlsRow}>
-			{/* Left half: Run due (filled) */}
-			<TouchableOpacity
-				onPress={runDueNow}
-				activeOpacity={0.9}
-				style={[styles.controlBtn, { backgroundColor: theme.primary1 }]}
-			>
-				<Ionicons name="play-outline" size={16} color={theme.onPrimary} />
-				<Text style={[styles.controlText, { color: theme.onPrimary }]}>
-					Run due
-				</Text>
-			</TouchableOpacity>
-
-			{/* Right half: New rule (white background) */}
 			<TouchableOpacity
 				onPress={openCreate}
 				activeOpacity={0.9}
-				style={[
-					styles.controlBtn,
-					{
-						backgroundColor: "#fff",
-						borderWidth: 1,
-						borderColor: theme.border,
-						elevation: 2,
-						shadowColor: "rgba(0,0,0,0.12)",
-						shadowOpacity: 0.12,
-						shadowRadius: 6,
-						shadowOffset: { width: 0, height: 2 },
-					},
-				]}
+				style={[styles.controlBtn, { backgroundColor: theme.primary1 }]}
 			>
-				<Ionicons name="add-circle-outline" size={16} color="#111827" />
-				<Text style={[styles.controlText, { color: "#111827" }]}>New rule</Text>
+				<Ionicons name="add-circle-outline" size={16} color={theme.onPrimary} />
+				<Text style={[styles.controlText, { color: theme.onPrimary }]}>
+					Add budget
+				</Text>
 			</TouchableOpacity>
 		</View>
 	);
@@ -327,13 +343,12 @@ export default function RecurringScreen({ navigation }: any) {
 			style={{ flex: 1, backgroundColor: theme.background }}
 			edges={["bottom"]}
 		>
+			{/* Transparent status bar + gradient overlay fix */}
 			<StatusBar
 				barStyle="light-content"
 				translucent
 				backgroundColor="transparent"
 			/>
-
-			{/* Status bar overlay to avoid white strip */}
 			<View style={[styles.statusOverlay, { height: insets.top }]}>
 				<LinearGradient
 					colors={[theme.primary2, theme.primary1]}
@@ -343,7 +358,7 @@ export default function RecurringScreen({ navigation }: any) {
 				/>
 			</View>
 
-			{/* Clean header with title only */}
+			{/* Header */}
 			<LinearGradient
 				colors={[theme.primary2, theme.primary1]}
 				start={{ x: 0, y: 0 }}
@@ -352,20 +367,20 @@ export default function RecurringScreen({ navigation }: any) {
 			>
 				<View style={{ flexDirection: "row", alignItems: "center" }}>
 					<Ionicons
-						name="repeat-outline"
+						name="wallet-outline"
 						size={32}
 						color={theme.onPrimary}
 						style={{ marginRight: 10 }}
 					/>
 					<Text style={[styles.headerTitle, { color: theme.onPrimary }]}>
-						Recurring
+						Budgets
 					</Text>
 				</View>
 			</LinearGradient>
 
 			<FlatList
-				data={rules}
-				keyExtractor={r => String(r.id)}
+				data={budgets}
+				keyExtractor={b => String(b.id)}
 				renderItem={renderItem}
 				contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
 				ListHeaderComponent={ListControls}
@@ -373,9 +388,9 @@ export default function RecurringScreen({ navigation }: any) {
 					<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
 				}
 				ListEmptyComponent={
-					<View style={{ alignItems: "center", marginTop: 40 }}>
+					<View style={{ alignItems: "center", marginTop: 60 }}>
 						{ListControls}
-						<Text style={{ fontSize: 48, marginTop: 16 }}>🔁</Text>
+						<Text style={{ fontSize: 48, marginTop: 16 }}>🧮</Text>
 						<Text
 							style={{
 								color: theme.textSecondary,
@@ -384,7 +399,7 @@ export default function RecurringScreen({ navigation }: any) {
 								marginTop: 12,
 							}}
 						>
-							No recurring rules yet
+							No budgets yet
 						</Text>
 						<Text
 							style={{
@@ -394,14 +409,13 @@ export default function RecurringScreen({ navigation }: any) {
 								textAlign: "center",
 							}}
 						>
-							Use “New rule” to create one. Your global + button keeps adding
-							transactions as usual.
+							Tap “Add budget” to create your first one.
 						</Text>
 					</View>
 				}
 			/>
 
-			{/* Create/Edit Modal */}
+			{/* Create / Edit Modal */}
 			<Modal
 				visible={showModal}
 				transparent
@@ -421,103 +435,78 @@ export default function RecurringScreen({ navigation }: any) {
 								style={[styles.modalContent, { backgroundColor: theme.card }]}
 							>
 								<Text style={[styles.modalTitle, { color: theme.text }]}>
-									{editing ? "Edit Rule" : "Create Rule"}
+									{editing ? "Edit Budget" : "Create Budget"}
 								</Text>
 
-								{/* income/expense */}
-								<View style={styles.segment}>
-									{(["expense", "income"] as ("expense" | "income")[]).map(
-										t => (
-											<TouchableOpacity
-												key={t}
-												onPress={() => setFType(t)}
-												style={[
-													styles.segmentBtn,
-													{
-														backgroundColor:
-															fType === t ? theme.primary1 : theme.card,
-														borderColor: theme.border,
-													},
-												]}
-											>
-												<Text
-													style={{
-														fontWeight: "800",
-														color:
-															fType === t
-																? theme.onPrimary
-																: theme.textSecondary,
-													}}
-												>
-													{t[0].toUpperCase() + t.slice(1)}
-												</Text>
-											</TouchableOpacity>
-										)
-									)}
-								</View>
+								<TextInput
+									style={[
+										styles.input,
+										{
+											borderColor: theme.border,
+											color: theme.text,
+											backgroundColor: theme.background,
+										},
+									]}
+									placeholder="Category"
+									placeholderTextColor={theme.textSecondary}
+									value={fCategory}
+									onChangeText={setFCategory}
+									returnKeyType="next"
+								/>
 
 								<TextInput
+									style={[
+										styles.input,
+										{
+											borderColor: theme.border,
+											color: theme.text,
+											backgroundColor: theme.background,
+										},
+									]}
 									placeholder="Amount (€)"
 									placeholderTextColor={theme.textSecondary}
 									keyboardType="numeric"
 									returnKeyType="done"
 									blurOnSubmit
 									onSubmitEditing={() => Keyboard.dismiss()}
-									style={[
-										styles.input,
-										{ borderColor: theme.border, color: theme.text },
-									]}
 									value={fAmount}
 									onChangeText={setFAmount}
 								/>
 
-								<TextInput
-									placeholder="Category"
-									placeholderTextColor={theme.textSecondary}
-									style={[
-										styles.input,
-										{ borderColor: theme.border, color: theme.text },
-									]}
-									value={fCategory}
-									onChangeText={setFCategory}
-								/>
-
-								{/* frequency — also closes the date wheel if open */}
+								{/* Period selector — close wheel if switching */}
 								<View style={styles.segment}>
-									{(["daily", "weekly", "monthly"] as RecurringFrequency[]).map(
-										freq => (
-											<TouchableOpacity
-												key={freq}
-												onPress={() => {
-													setFFreq(freq);
-													setShowDatePicker(false); // close the wheel when changing frequency
+									{(["weekly", "monthly"] as BudgetPeriod[]).map(p => (
+										<TouchableOpacity
+											key={p}
+											onPress={() => {
+												setFPeriod(p);
+												setShowDatePicker(false); // close inline wheel when switching
+											}}
+											style={[
+												styles.segmentBtn,
+												{
+													backgroundColor:
+														fPeriod === p ? theme.primary1 : theme.card,
+													borderColor: theme.border,
+												},
+											]}
+										>
+											<Text
+												style={{
+													fontWeight: "800",
+													color:
+														fPeriod === p
+															? theme.onPrimary
+															: theme.textSecondary,
 												}}
-												style={[
-													styles.segmentBtn,
-													{
-														backgroundColor:
-															fFreq === freq ? theme.primary1 : theme.card,
-														borderColor: theme.border,
-													},
-												]}
 											>
-												<Text
-													style={{
-														fontWeight: "800",
-														color:
-															fFreq === freq
-																? theme.onPrimary
-																: theme.textSecondary,
-													}}
-												>
-													{freq[0].toUpperCase() + freq.slice(1)}
-												</Text>
-											</TouchableOpacity>
-										)
-									)}
+												{p[0].toUpperCase() + p.slice(1)}
+											</Text>
+										</TouchableOpacity>
+									))}
 								</View>
 
-								{/* anchor date */}
+								{/* Start date (anchor) */}
 								<TouchableOpacity
 									onPress={openDatePicker}
 									style={[
@@ -533,7 +522,7 @@ export default function RecurringScreen({ navigation }: any) {
 									</Text>
 								</TouchableOpacity>
 
-								{/* ANDROID: native dialog (closes after selection) */}
+								{/* ANDROID: native dialog */}
 								{showDatePicker && Platform.OS === "android" && (
 									<DateTimePicker
 										value={fStartDate}
@@ -547,7 +536,7 @@ export default function RecurringScreen({ navigation }: any) {
 									/>
 								)}
 
-								{/* iOS: inline spinner (stays open), single instance */}
+								{/* iOS: inline spinner, clipped & centered like Recurring */}
 								{showDatePicker && Platform.OS === "ios" && (
 									<View
 										style={[
@@ -568,7 +557,7 @@ export default function RecurringScreen({ navigation }: any) {
 													: "light"
 											}
 											onChange={(_, selected) => {
-												if (selected) setFStartDate(selected); // live update, don't close
+												if (selected) setFStartDate(selected); // live update
 											}}
 											style={styles.iosSpinner}
 										/>
@@ -603,6 +592,7 @@ export default function RecurringScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
+	// covers the status-bar area with the same gradient to avoid a white strip
 	statusOverlay: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 1 },
 
 	header: {
@@ -634,10 +624,7 @@ const styles = StyleSheet.create({
 	controlText: { marginLeft: 6, fontWeight: "800" },
 
 	card: {
-		width: "100%",
-		maxWidth: 520,
 		borderRadius: 16,
-		alignSelf: "center",
 		padding: 16,
 		marginBottom: 12,
 		elevation: 2,
@@ -650,18 +637,8 @@ const styles = StyleSheet.create({
 		justifyContent: "space-between",
 	},
 	cardTitle: { fontSize: 17, fontWeight: "800" },
+	cardAmount: { fontSize: 15, fontWeight: "700" },
 
-	badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
-	badge: {
-		flexDirection: "row",
-		alignItems: "center",
-		borderWidth: 1,
-		borderRadius: 999,
-		paddingHorizontal: 10,
-		paddingVertical: 6,
-	},
-
-	// Modal
 	modalOverlay: {
 		flex: 1,
 		backgroundColor: "rgba(0,0,0,0.4)",
@@ -671,9 +648,9 @@ const styles = StyleSheet.create({
 	modalContent: {
 		padding: 24,
 		borderRadius: 16,
-		width: "100%", // <- was 88%
-		maxWidth: 520, // <- match Quick Add
-		alignSelf: "center",
+		width: "100%", // was "88%"
+		maxWidth: 520,
+		alignSelf: "center", // ensure it’s centered like Recurring
 		elevation: 4,
 		shadowColor: "rgba(0,0,0,0.15)",
 		shadowOpacity: 0.2,
@@ -693,6 +670,7 @@ const styles = StyleSheet.create({
 		borderRadius: 10,
 		width: "100%",
 	},
+
 	segment: { flexDirection: "row", gap: 8, marginBottom: 12 },
 	segmentBtn: {
 		flex: 1,
@@ -710,20 +688,18 @@ const styles = StyleSheet.create({
 		marginBottom: 14,
 	},
 
-	// Inline iOS picker container
+	// Inline iOS picker container (same as Recurring)
 	inlinePickerBox: {
 		borderWidth: 1,
 		borderRadius: 16,
 		overflow: "hidden",
-		alignSelf: "stretch",
-		width: "100%", // <- ensure full width of card
-		minWidth: 0, // <- avoid clipping on small widths
 		marginBottom: 12,
+		alignSelf: "stretch",
+		width: "100%", // add
+		minWidth: 0, // add (prevents clipping)
 	},
-
-	// styles.iosSpinner
 	iosSpinner: {
-		width: "100%", // <- fill container
+		width: "100%",
 		alignSelf: "stretch",
 		height: 216,
 	},

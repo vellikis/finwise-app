@@ -1,41 +1,65 @@
-import React from "react";
-import { Text, TouchableOpacity, StyleSheet } from "react-native";
-import { useNavigation, NavigationProp } from "@react-navigation/native";
+// navigation/TabNavigator.tsx
+import React, { useState } from "react";
+import { TouchableOpacity, StyleSheet, Modal, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather, Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// Import screens
 import HomeScreen from "../screens/HomeScreen";
 import TransactionsScreen from "../screens/TransactionsScreen";
-import CategoriesScreen from "../screens/CategoriesScreen";
+import BudgetsScreen from "../screens/BudgetsScreen";
 import RecurringScreen from "../screens/RecurringScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import { useTheme } from "../theme";
+import QuickAddModal from "../components/QuickAddModal"; // <-- use the presentational component
 
-// Type for Bottom Tabs
 export type TabParamList = {
 	Home: undefined;
 	Transactions: undefined;
-	Categories: undefined;
+	Budgets: undefined;
 	Recurring: undefined;
 	Settings: undefined;
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
-// HOC to inject FAB
-function withFAB<P extends object>(WrappedComponent: React.ComponentType<P>) {
-	return function ComponentWithFAB(props: any) {
-		const navigation = useNavigation<NavigationProp<any>>();
+// HOC: only used on the tabs where FAB should show
+function withFAB<P extends object>(Wrapped: React.ComponentType<P>) {
+	return function ComponentWithFAB(props: P) {
+		const insets = useSafeAreaInsets();
+		const theme = useTheme();
+		const [showQuick, setShowQuick] = useState(false);
+
 		return (
 			<>
-				<WrappedComponent {...props} />
+				<Wrapped {...props} />
+
+				{/* Floating + */}
 				<TouchableOpacity
-					style={fabStyles.button}
-					onPress={() => navigation.navigate("QuickAdd")}
+					activeOpacity={0.9}
+					style={[
+						fabStyles.button,
+						{
+							backgroundColor: theme.primary,
+							bottom: insets.bottom + 24,
+							shadowColor: "rgba(0,0,0,0.35)",
+						},
+					]}
+					onPress={() => setShowQuick(true)}
 				>
-					<Text style={fabStyles.text}>+</Text>
+					<Ionicons name="add" size={28} color={theme.onPrimary ?? "#fff"} />
 				</TouchableOpacity>
+
+				{/* Real overlay modal (tinted) */}
+				<Modal
+					visible={showQuick}
+					transparent
+					animationType="slide"
+					onRequestClose={() => setShowQuick(false)}
+				>
+					{/* QuickAddModal renders the dim + card, and will call onClose itself */}
+					<QuickAddModal onClose={() => setShowQuick(false)} />
+				</Modal>
 			</>
 		);
 	};
@@ -57,30 +81,35 @@ export default function TabNavigator() {
 				tabBarInactiveTintColor: theme.textSecondary,
 				tabBarShowLabel: true,
 				tabBarIcon: ({ color, size }) => {
-					if (route.name === "Home") {
-						return <Feather name="home" size={size} color={color} />;
+					switch (route.name) {
+						case "Home":
+							return <Feather name="home" size={size} color={color} />;
+						case "Transactions":
+							return (
+								<Ionicons name="swap-horizontal" size={size} color={color} />
+							);
+						case "Budgets":
+							return (
+								<Ionicons name="wallet-outline" size={size} color={color} />
+							);
+						case "Recurring":
+							return <Ionicons name="repeat" size={size} color={color} />;
+						case "Settings":
+							return <Feather name="settings" size={size} color={color} />;
+						default:
+							return null;
 					}
-					if (route.name === "Transactions") {
-						return <Feather name="list" size={size} color={color} />;
-					}
-					if (route.name === "Categories") {
-						return <Feather name="grid" size={size} color={color} />;
-					}
-					if (route.name === "Recurring") {
-						return <Ionicons name="repeat" size={size} color={color} />;
-					}
-					if (route.name === "Settings") {
-						return <Feather name="settings" size={size} color={color} />;
-					}
-					return null;
 				},
 			})}
 		>
+			{/* ✅ FAB only on these two tabs */}
 			<Tab.Screen name="Home" component={withFAB(HomeScreen)} />
 			<Tab.Screen name="Transactions" component={withFAB(TransactionsScreen)} />
-			<Tab.Screen name="Categories" component={withFAB(CategoriesScreen)} />
-			<Tab.Screen name="Recurring" component={withFAB(RecurringScreen)} />
-			<Tab.Screen name="Settings" component={withFAB(SettingsScreen)} />
+
+			{/* ⛔ No FAB on these */}
+			<Tab.Screen name="Budgets" component={BudgetsScreen} />
+			<Tab.Screen name="Recurring" component={RecurringScreen} />
+			<Tab.Screen name="Settings" component={SettingsScreen} />
 		</Tab.Navigator>
 	);
 }
@@ -89,18 +118,14 @@ const fabStyles = StyleSheet.create({
 	button: {
 		position: "absolute",
 		right: 20,
-		bottom: 30,
-		width: 60,
-		height: 60,
-		borderRadius: 30,
-		backgroundColor: "#007AFF",
+		width: 56,
+		height: 56,
+		borderRadius: 28,
 		alignItems: "center",
 		justifyContent: "center",
-		elevation: 8, // Add shadow on Android
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.2,
-		shadowRadius: 4,
+		elevation: 8, // Android shadow
+		shadowOpacity: 0.35,
+		shadowRadius: 8,
+		shadowOffset: { width: 0, height: 6 },
 	},
-	text: { color: "#fff", fontSize: 32, lineHeight: 32 },
 });
