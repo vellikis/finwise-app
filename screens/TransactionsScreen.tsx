@@ -1,4 +1,10 @@
-import React, { useState } from "react";
+import React, {
+	useMemo,
+	useState,
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+} from "react";
 import {
 	View,
 	FlatList,
@@ -12,6 +18,7 @@ import {
 	Modal,
 	TextInput,
 	Button,
+	StatusBar,
 } from "react-native";
 import {
 	getTransactions,
@@ -21,8 +28,14 @@ import {
 } from "../database";
 import { useIsFocused } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-// 👇 Adjust path as needed
-import { useTheme } from "../theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { Swipeable } from "react-native-gesture-handler";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import {
+	SafeAreaView,
+	useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { useTheme } from "../theme"; // <-- adjust path if needed
 
 if (
 	Platform.OS === "android" &&
@@ -31,13 +44,20 @@ if (
 	UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function TransactionsScreen() {
+type FilterKey = "today" | "week" | "month" | "custom";
+
+export default function TransactionsScreen({ navigation }: any) {
+	const insets = useSafeAreaInsets();
 	const theme = useTheme();
 
-	const [data, setData] = React.useState<Transaction[]>([]);
+	useLayoutEffect(() => {
+		navigation?.setOptions?.({ headerShown: false });
+	}, [navigation]);
+
+	const [data, setData] = useState<Transaction[]>([]);
 	const [expandedId, setExpandedId] = useState<number | null>(null);
 
-	// Edit modal states
+	// Edit modal
 	const [editModalVisible, setEditModalVisible] = useState(false);
 	const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 	const [editAmount, setEditAmount] = useState("");
@@ -46,43 +66,48 @@ export default function TransactionsScreen() {
 	const [editDate, setEditDate] = useState(new Date());
 	const [showDatePicker, setShowDatePicker] = useState(false);
 
+	// Filters
+	const [filter, setFilter] = useState<FilterKey>("today");
+	const [customFrom, setCustomFrom] = useState<Date | null>(null);
+	const [customTo, setCustomTo] = useState<Date | null>(null);
+	const [showFromPicker, setShowFromPicker] = useState(false);
+	const [showToPicker, setShowToPicker] = useState(false);
+
 	const isFocused = useIsFocused();
 
-	React.useEffect(() => {
-		if (isFocused) {
-			(async () => {
-				const list = await getTransactions();
-				setData(list);
-			})();
-		}
-	}, [isFocused]);
+	const load = useCallback(async () => {
+		const list = await getTransactions();
+		list.sort(
+			(a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+		);
+		setData(list);
+	}, []);
+
+	useEffect(() => {
+		if (isFocused) load();
+	}, [isFocused, load]);
 
 	const handleExpand = (id: number) => {
 		LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-		setExpandedId(prevId => (prevId === id ? null : id));
+		setExpandedId(prev => (prev === id ? null : id));
 	};
 
-	const handleDelete = (id: number) => {
+	const handleDelete = async (id: number) => {
 		Alert.alert(
 			"Delete Transaction",
 			"Are you sure you want to delete this transaction?",
 			[
-				{
-					text: "Cancel",
-					style: "cancel",
-				},
+				{ text: "Cancel", style: "cancel" },
 				{
 					text: "Delete",
 					style: "destructive",
 					onPress: async () => {
 						await deleteTransaction(id);
-						const list = await getTransactions();
-						setData(list);
+						await load();
 						setExpandedId(null);
 					},
 				},
-			],
-			{ cancelable: true }
+			]
 		);
 	};
 
@@ -101,140 +126,147 @@ export default function TransactionsScreen() {
 			editingTx.id,
 			editType,
 			parseFloat(editAmount),
-			editCategory,
+			editCategory.trim() || "Uncategorized",
 			editDate.toISOString()
 		);
-		const list = await getTransactions();
-		setData(list);
+		await load();
 		setEditModalVisible(false);
 		setExpandedId(null);
 	};
 
-	const styles = StyleSheet.create({
-		container: { flex: 1, padding: 16, backgroundColor: theme.background },
-		row: {
-			flexDirection: "row",
-			justifyContent: "space-between",
-			paddingVertical: 18,
-			borderRadius: 10,
-			marginBottom: 6,
-			alignItems: "center",
-			paddingHorizontal: 18,
-			backgroundColor: theme.card,
-		},
-		incomeBox: {
-			backgroundColor: theme.income,
-		},
-		expenseBox: {
-			backgroundColor: theme.expense,
-		},
-		rowText: {
-			color: theme.text,
-			fontWeight: "bold",
-			fontSize: 18,
-		},
-		detailsBox: {
-			backgroundColor: theme.card,
-			padding: 14,
-			borderBottomLeftRadius: 10,
-			borderBottomRightRadius: 10,
-			marginBottom: 10,
-		},
-		detailsText: {
-			color: theme.textSecondary,
-			marginBottom: 6,
-			fontSize: 15,
-		},
-		deleteBtn: {
-			color: theme.expense,
-			fontWeight: "bold",
-			fontSize: 16,
-		},
-		buttonRow: {
-			flexDirection: "row",
-			justifyContent: "space-between",
-			alignItems: "center",
-			marginTop: 12,
-		},
-		editBtn: {
-			color: theme.primary,
-			fontWeight: "bold",
-			fontSize: 16,
-		},
-		input: {
-			borderBottomWidth: 1,
-			borderColor: theme.border,
-			marginBottom: 14,
-			padding: 10,
-			fontSize: 16,
-			color: theme.text,
-			backgroundColor: theme.card,
-		},
-		modalOverlay: {
-			flex: 1,
-			backgroundColor: "rgba(0,0,0,0.4)",
-			justifyContent: "center",
-			alignItems: "center",
-		},
-		modalContent: {
-			backgroundColor: theme.card,
-			padding: 24,
-			borderRadius: 14,
-			width: "85%",
-		},
-		modalTitle: {
-			color: theme.text,
-			fontSize: 20,
-			marginBottom: 16,
-			textAlign: "center",
-		},
-		datePickerBtn: {
-			padding: 10,
-			borderWidth: 1,
-			borderColor: theme.border,
-			borderRadius: 8,
-			alignItems: "center",
-			marginBottom: 14,
-			backgroundColor: theme.background,
-		},
-		datePickerText: {
-			color: theme.text,
-		},
-	});
+	const startOfDay = (d: Date) =>
+		new Date(d.getFullYear(), d.getMonth(), d.getDate());
+	const isInRange = (d: Date, from: Date, to: Date) =>
+		d.getTime() >= startOfDay(from).getTime() &&
+		d.getTime() <=
+			new Date(
+				to.getFullYear(),
+				to.getMonth(),
+				to.getDate(),
+				23,
+				59,
+				59
+			).getTime();
+
+	const filteredData = useMemo(() => {
+		const now = new Date();
+		if (filter === "today")
+			return data.filter(tx => isInRange(new Date(tx.date), now, now));
+		if (filter === "week") {
+			const from = new Date(now);
+			from.setDate(now.getDate() - 6);
+			return data.filter(tx => isInRange(new Date(tx.date), from, now));
+		}
+		if (filter === "month") {
+			const from = new Date(now.getFullYear(), now.getMonth(), 1);
+			return data.filter(tx => isInRange(new Date(tx.date), from, now));
+		}
+		if (customFrom && customTo)
+			return data.filter(tx =>
+				isInRange(new Date(tx.date), customFrom, customTo)
+			);
+		return data;
+	}, [data, filter, customFrom, customTo]);
+
+	const openCustomPickers = () => {
+		setFilter("custom");
+		setShowFromPicker(true);
+	};
+
+	const renderRightActions = (id: number) => (
+		<TouchableOpacity
+			onPress={() => handleDelete(id)}
+			activeOpacity={0.9}
+			style={[styles.deleteAction, { backgroundColor: theme.expense }]}
+		>
+			<Ionicons name="trash" size={22} color="#fff" />
+			<Text style={styles.deleteActionText}>Delete</Text>
+		</TouchableOpacity>
+	);
 
 	const renderItem = ({ item }: { item: Transaction }) => {
 		const isExpanded = expandedId === item.id;
-		const boxStyle =
-			item.type === "income"
-				? [styles.row, styles.incomeBox]
-				: [styles.row, styles.expenseBox];
+		const isIncome = item.type === "income";
+
+		const RowContent = (
+			<TouchableOpacity
+				activeOpacity={0.9}
+				onPress={() => handleExpand(item.id)}
+			>
+				<View
+					style={[
+						styles.row,
+						{ backgroundColor: theme.card, shadowColor: "rgba(0,0,0,0.08)" },
+					]}
+				>
+					<View style={styles.rowLeft}>
+						<View
+							style={[
+								styles.dot,
+								{ backgroundColor: isIncome ? theme.income : theme.expense },
+							]}
+						/>
+						<Text
+							style={[styles.rowTitle, { color: theme.text }]}
+							numberOfLines={1}
+						>
+							{item.category}
+						</Text>
+					</View>
+
+					<Text
+						style={[
+							styles.amount,
+							{ color: isIncome ? theme.income : theme.expense },
+						]}
+						numberOfLines={1}
+						adjustsFontSizeToFit
+					>
+						{isIncome ? "+" : "-"}€{item.amount.toFixed(2)}
+					</Text>
+				</View>
+			</TouchableOpacity>
+		);
 
 		return (
 			<View>
-				<TouchableOpacity
-					activeOpacity={0.85}
-					onPress={() => handleExpand(item.id)}
-				>
-					<View style={boxStyle}>
-						<Text style={styles.rowText}>{item.category}</Text>
-						<Text style={styles.rowText}>
-							{item.type === "income" ? "+" : "-"}
-							{item.amount.toFixed(2)}€
-						</Text>
-					</View>
-				</TouchableOpacity>
+				<Swipeable renderRightActions={() => renderRightActions(item.id)}>
+					{RowContent}
+				</Swipeable>
+
 				{isExpanded && (
-					<View style={styles.detailsBox}>
-						<Text style={styles.detailsText}>
+					<View
+						style={[
+							styles.detailsBox,
+							{ backgroundColor: theme.card, borderColor: theme.border },
+						]}
+					>
+						<Text style={[styles.detailsText, { color: theme.textSecondary }]}>
 							Date: {new Date(item.date).toLocaleDateString()}
 						</Text>
-						<Text style={styles.detailsText}>Type: {item.type}</Text>
+						<Text style={[styles.detailsText, { color: theme.textSecondary }]}>
+							Type: {item.type}
+						</Text>
+
 						<View style={styles.buttonRow}>
-							<TouchableOpacity onPress={() => handleEdit(item)}>
-								<Text style={styles.editBtn}>Edit</Text>
+							<TouchableOpacity
+								onPress={() => handleEdit(item)}
+								style={[
+									styles.pillBtn,
+									{ backgroundColor: (theme as any).primarySoft ?? "#EEF2FF" },
+								]}
+							>
+								<Text style={[styles.pillBtnText, { color: theme.primary2 }]}>
+									Edit
+								</Text>
 							</TouchableOpacity>
-							<TouchableOpacity onPress={() => handleDelete(item.id)}>
-								<Text style={styles.deleteBtn}>Delete</Text>
+							<TouchableOpacity
+								onPress={() => handleDelete(item.id)}
+								style={[styles.pillBtn, { backgroundColor: theme.expense }]}
+							>
+								<Text style={[styles.pillBtnText, { color: "#fff" }]}>
+									Delete
+								</Text>
 							</TouchableOpacity>
 						</View>
 					</View>
@@ -244,11 +276,117 @@ export default function TransactionsScreen() {
 	};
 
 	return (
-		<View style={styles.container}>
+		<SafeAreaView
+			style={{ flex: 1, backgroundColor: theme.background }}
+			edges={["bottom"]}
+		>
+			<StatusBar
+				barStyle="light-content"
+				translucent
+				backgroundColor="transparent"
+			/>
+
+			{/* Header */}
+			<LinearGradient
+				colors={[theme.primary2, theme.primary1]}
+				start={{ x: 0, y: 0 }}
+				end={{ x: 1, y: 1 }}
+				style={[styles.header, { paddingTop: insets.top + 12 }]}
+			>
+				<View style={{ flexDirection: "row", alignItems: "center" }}>
+					<MaterialCommunityIcons
+						name="swap-horizontal"
+						size={32}
+						color={theme.onPrimary}
+						style={{ marginRight: 10 }}
+					/>
+					<Text style={[styles.headerTitle, { color: theme.onPrimary }]}>
+						Transactions
+					</Text>
+				</View>
+			</LinearGradient>
+
+			{/* Filter bar */}
+			<View style={styles.filterBar}>
+				{(["today", "week", "month"] as FilterKey[]).map(key => (
+					<TouchableOpacity
+						key={key}
+						onPress={() => setFilter(key)}
+						style={[
+							styles.filterChip,
+							{ backgroundColor: theme.card, borderColor: theme.border },
+							filter === key && { backgroundColor: theme.primary1 },
+						]}
+						activeOpacity={0.9}
+					>
+						<Text
+							style={[
+								styles.filterText,
+								{
+									color: filter === key ? theme.onPrimary : theme.textSecondary,
+								},
+							]}
+						>
+							{key[0].toUpperCase() + key.slice(1)}
+						</Text>
+					</TouchableOpacity>
+				))}
+				<TouchableOpacity
+					onPress={openCustomPickers}
+					style={[
+						styles.filterChip,
+						{ backgroundColor: theme.card, borderColor: theme.border },
+						filter === "custom" && { backgroundColor: theme.primary1 },
+					]}
+					activeOpacity={0.9}
+				>
+					<Text
+						style={[
+							styles.filterText,
+							{
+								color:
+									filter === "custom" ? theme.onPrimary : theme.textSecondary,
+							},
+						]}
+					>
+						Custom
+					</Text>
+				</TouchableOpacity>
+			</View>
+
+			{/* Custom range pickers */}
+			{filter === "custom" && (
+				<View style={styles.customRangeRow}>
+					<TouchableOpacity
+						onPress={() => setShowFromPicker(true)}
+						style={[
+							styles.rangeBtn,
+							{ borderColor: theme.border, backgroundColor: theme.card },
+						]}
+					>
+						<Text style={{ color: theme.textSecondary }}>
+							{customFrom ? customFrom.toLocaleDateString() : "From"}
+						</Text>
+					</TouchableOpacity>
+					<TouchableOpacity
+						onPress={() => setShowToPicker(true)}
+						style={[
+							styles.rangeBtn,
+							{ borderColor: theme.border, backgroundColor: theme.card },
+						]}
+					>
+						<Text style={{ color: theme.textSecondary }}>
+							{customTo ? customTo.toLocaleDateString() : "To"}
+						</Text>
+					</TouchableOpacity>
+				</View>
+			)}
+
 			<FlatList
-				data={data}
+				data={filteredData}
 				keyExtractor={item => item.id?.toString() ?? Math.random().toString()}
 				renderItem={renderItem}
+				contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
 				ListEmptyComponent={
 					<View style={{ alignItems: "center", marginTop: 60 }}>
 						<Text style={{ fontSize: 48, marginBottom: 12 }}>🕊️</Text>
@@ -276,6 +414,7 @@ export default function TransactionsScreen() {
 				}
 			/>
 
+			{/* Edit Modal */}
 			<Modal
 				visible={editModalVisible}
 				transparent
@@ -283,10 +422,19 @@ export default function TransactionsScreen() {
 				onRequestClose={() => setEditModalVisible(false)}
 			>
 				<View style={styles.modalOverlay}>
-					<View style={styles.modalContent}>
-						<Text style={styles.modalTitle}>Edit Transaction</Text>
+					<View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+						<Text style={[styles.modalTitle, { color: theme.text }]}>
+							Edit Transaction
+						</Text>
 						<TextInput
-							style={styles.input}
+							style={[
+								styles.input,
+								{
+									borderColor: theme.border,
+									color: theme.text,
+									backgroundColor: theme.background,
+								},
+							]}
 							placeholder="Amount"
 							placeholderTextColor={theme.textSecondary}
 							keyboardType="numeric"
@@ -294,20 +442,35 @@ export default function TransactionsScreen() {
 							onChangeText={setEditAmount}
 						/>
 						<TextInput
-							style={styles.input}
+							style={[
+								styles.input,
+								{
+									borderColor: theme.border,
+									color: theme.text,
+									backgroundColor: theme.background,
+								},
+							]}
 							placeholder="Category"
 							placeholderTextColor={theme.textSecondary}
 							value={editCategory}
 							onChangeText={setEditCategory}
 						/>
+
 						<TouchableOpacity
 							onPress={() => setShowDatePicker(true)}
-							style={styles.datePickerBtn}
+							style={[
+								styles.datePickerBtn,
+								{
+									borderColor: theme.border,
+									backgroundColor: theme.background,
+								},
+							]}
 						>
-							<Text style={styles.datePickerText}>
+							<Text style={{ color: theme.text }}>
 								{editDate.toLocaleDateString()}
 							</Text>
 						</TouchableOpacity>
+
 						{showDatePicker && (
 							<DateTimePicker
 								value={editDate}
@@ -319,6 +482,7 @@ export default function TransactionsScreen() {
 								}}
 							/>
 						)}
+
 						<View
 							style={{
 								flexDirection: "row",
@@ -334,6 +498,7 @@ export default function TransactionsScreen() {
 								}
 							/>
 						</View>
+
 						<View
 							style={{
 								flexDirection: "row",
@@ -346,11 +511,181 @@ export default function TransactionsScreen() {
 								onPress={() => setEditModalVisible(false)}
 								color={theme.textSecondary}
 							/>
-							<Button title="Save" onPress={saveEdit} color={theme.primary} />
+							<Button title="Save" onPress={saveEdit} color={theme.primary2} />
 						</View>
 					</View>
 				</View>
 			</Modal>
-		</View>
+
+			{/* Custom date pickers */}
+			{showFromPicker && (
+				<DateTimePicker
+					value={customFrom ?? new Date()}
+					mode="date"
+					display={Platform.OS === "ios" ? "spinner" : "default"}
+					onChange={(_, selected) => {
+						setShowFromPicker(false);
+						if (selected) setCustomFrom(startOfDay(selected));
+					}}
+				/>
+			)}
+			{showToPicker && (
+				<DateTimePicker
+					value={customTo ?? new Date()}
+					mode="date"
+					display={Platform.OS === "ios" ? "spinner" : "default"}
+					onChange={(_, selected) => {
+						setShowToPicker(false);
+						if (selected) setCustomTo(startOfDay(selected));
+					}}
+				/>
+			)}
+		</SafeAreaView>
 	);
 }
+
+const styles = StyleSheet.create({
+	container: { flex: 1 },
+
+	header: {
+		marginBottom: 14,
+		paddingBottom: 20,
+		paddingHorizontal: 24,
+		borderBottomLeftRadius: 28,
+		borderBottomRightRadius: 28,
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		elevation: 6,
+		shadowColor: "#000",
+		shadowOpacity: 0.08,
+		shadowRadius: 10,
+	},
+	headerTitle: {
+		fontSize: 28,
+		fontWeight: "900",
+		letterSpacing: 1.2,
+	},
+
+	filterBar: {
+		flexDirection: "row",
+		alignItems: "center",
+		paddingHorizontal: 16,
+		marginBottom: 8,
+	},
+	filterChip: {
+		paddingVertical: 8,
+		paddingHorizontal: 14,
+		borderRadius: 999,
+		borderWidth: 1,
+		marginRight: 8,
+		elevation: 1,
+		shadowColor: "rgba(0,0,0,0.05)",
+		shadowOpacity: 0.1,
+		shadowRadius: 2,
+	},
+	filterText: { fontWeight: "700", fontSize: 13 },
+
+	customRangeRow: {
+		flexDirection: "row",
+		paddingHorizontal: 16,
+		marginBottom: 8,
+		gap: 8,
+	},
+	rangeBtn: {
+		flex: 1,
+		borderWidth: 1,
+		borderRadius: 12,
+		paddingVertical: 10,
+		alignItems: "center",
+	},
+
+	row: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		alignItems: "center",
+		paddingVertical: 16,
+		paddingHorizontal: 16,
+		borderRadius: 16,
+		marginBottom: 10,
+		elevation: 2,
+		shadowOpacity: 0.12,
+		shadowRadius: 6,
+	},
+	rowLeft: { flexDirection: "row", alignItems: "center", maxWidth: "60%" },
+	dot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+	rowTitle: { fontSize: 16, fontWeight: "700" },
+	amount: {
+		fontSize: 18,
+		fontWeight: "900",
+		maxWidth: "40%",
+		textAlign: "right",
+	},
+
+	detailsBox: {
+		marginTop: -6,
+		marginBottom: 10,
+		padding: 14,
+		borderBottomLeftRadius: 16,
+		borderBottomRightRadius: 16,
+		borderWidth: 1,
+	},
+	detailsText: { marginBottom: 6, fontSize: 15 },
+	buttonRow: {
+		flexDirection: "row",
+		justifyContent: "flex-end",
+		gap: 12,
+		marginTop: 8,
+	},
+	pillBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999 },
+
+	pillBtnText: {
+		fontWeight: "800",
+	},
+
+	deleteAction: {
+		justifyContent: "center",
+		alignItems: "center",
+		width: 90,
+		borderRadius: 16,
+		marginVertical: 5,
+	},
+
+	deleteActionText: { color: "#fff", marginTop: 4, fontWeight: "800" },
+
+	modalOverlay: {
+		flex: 1,
+		backgroundColor: "rgba(0,0,0,0.4)",
+		justifyContent: "center",
+		alignItems: "center",
+	},
+	modalContent: {
+		padding: 24,
+		borderRadius: 16,
+		width: "88%",
+		elevation: 4,
+		shadowColor: "rgba(0,0,0,0.15)",
+		shadowOpacity: 0.2,
+		shadowRadius: 8,
+	},
+	modalTitle: {
+		fontSize: 20,
+		marginBottom: 16,
+		textAlign: "center",
+		fontWeight: "800",
+	},
+	input: {
+		borderBottomWidth: 1,
+		marginBottom: 14,
+		padding: 10,
+		fontSize: 16,
+		borderRadius: 8,
+	},
+	datePickerBtn: {
+		padding: 12,
+		borderWidth: 1,
+		borderRadius: 10,
+		alignItems: "center",
+		marginBottom: 14,
+	},
+});

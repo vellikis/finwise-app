@@ -28,7 +28,10 @@
     "react-native-sqlite-storage": "^6.0.1",
     "react-native-svg": "15.11.2",
     "react-native-vector-icons": "^10.3.0",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "expo-linear-gradient": "~14.1.5",
+    "expo-blur": "~14.1.5",
+    "expo-splash-screen": "~0.30.10"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
