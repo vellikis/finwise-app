@@ -102,7 +102,7 @@ expo-file-system + expo-sharing (CSV export)
 └─ utils/
    └─ money.ts (formatAmount helper)
 
-⚙️ Useful Scripts
+## ⚙️ Useful Scripts
 # Start Metro / Expo
 `npx expo start`
 
