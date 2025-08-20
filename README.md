@@ -103,16 +103,16 @@ expo-file-system + expo-sharing (CSV export)
    └─ money.ts (formatAmount helper)
 
 ## ⚙️ Useful Scripts
-# Start Metro / Expo
+- Start Metro / Expo
 `npx expo start`
 
-# Run on Android (emulator)
+- Run on Android (emulator)
 `npx expo run:android`
 
-# Run on iOS (simulator; macOS only)
+- Run on iOS (simulator; macOS only)
 `npx expo run:ios`
 
-## 🔒 iOS / Android Notes
+- 🔒 iOS / Android Notes
 
 System Theme: Ensure app.json has:
 
