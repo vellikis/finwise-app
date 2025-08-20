@@ -15,7 +15,7 @@ import QuickAddModal from "../components/QuickAddModal"; // <-- use the presenta
 
 export type TabParamList = {
 	Home: undefined;
-	Transactions: undefined;
+	Transactions: { refreshToken?: number } | undefined;
 	Budgets: undefined;
 	Recurring: undefined;
 	Settings: undefined;
@@ -34,7 +34,7 @@ function withFAB<P extends object>(Wrapped: React.ComponentType<P>) {
 			<>
 				<Wrapped {...props} />
 
-				{/* Floating + */}
+				{/* FAB... unchanged */}
 				<TouchableOpacity
 					activeOpacity={0.9}
 					style={[
@@ -50,15 +50,21 @@ function withFAB<P extends object>(Wrapped: React.ComponentType<P>) {
 					<Ionicons name="add" size={28} color={theme.onPrimary ?? "#fff"} />
 				</TouchableOpacity>
 
-				{/* Real overlay modal (tinted) */}
+				{/* Modal */}
 				<Modal
 					visible={showQuick}
 					transparent
 					animationType="slide"
 					onRequestClose={() => setShowQuick(false)}
 				>
-					{/* QuickAddModal renders the dim + card, and will call onClose itself */}
-					<QuickAddModal onClose={() => setShowQuick(false)} />
+					<QuickAddModal
+						onClose={() => setShowQuick(false)}
+						onSaved={() => {
+							(props as any)?.navigation?.navigate("Transactions", {
+								refreshToken: Date.now(),
+							});
+						}}
+					/>
 				</Modal>
 			</>
 		);

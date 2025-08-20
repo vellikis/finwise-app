@@ -3,30 +3,32 @@
     "name": "FinWise",
     "slug": "FinWise",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "scheme": "finwise",
+    "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash-light.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#ffffff",
+      "dark": {
+        "image": "./assets/splash-dark.png",
+        "backgroundColor": "#000000"
+      }
     },
     "ios": {
+      "bundleIdentifier": "com.yourname.finwise",
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true
+      }
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "plugins": [
-      "expo-sqlite"
-    ]
+    "extra": {
+      "eas": {
+        "projectId": "96e9f0f3-54d9-4183-9b61-edc18c2a3eb3"
+      }
+    }
   }
 }

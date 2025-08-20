@@ -1,25 +1,44 @@
-import React, { useEffect, useState } from "react";
-import { NavigationContainer } from "@react-navigation/native";
+// App.tsx
+import React, { useCallback, useEffect, useState } from "react";
+import { useColorScheme } from "react-native";
+import {
+	NavigationContainer,
+	DarkTheme as NavDark,
+	DefaultTheme as NavLight,
+} from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import TabNavigator from "./navigation/TabNavigator";
-import QuickAddModal from "./components/QuickAddModal";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { ThemeProvider, useTheme, getNavigationTheme } from "./theme";
 import * as SplashScreen from "expo-splash-screen";
+
+import TabNavigator from "./navigation/TabNavigator";
+import { ThemeProvider, useTheme, useThemeMode } from "./theme";
 import { initDB, materializeRecurring } from "./database";
 
-export type RootStackParamList = {
-	MainTabs: undefined;
-	QuickAdd: undefined;
-};
+SplashScreen.preventAutoHideAsync(); // <-- call once, as early as possible
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+const Stack = createNativeStackNavigator<{ MainTabs: undefined }>();
 
-// A wrapper to access theme in NavigationContainer
 function ThemedNavigation() {
 	const theme = useTheme();
+	const { mode } = useThemeMode();
+	const scheme = useColorScheme();
+	const isDark = mode === "dark" || (mode === "system" && scheme === "dark");
+
+	const navTheme = {
+		...(isDark ? NavDark : NavLight),
+		colors: {
+			...(isDark ? NavDark.colors : NavLight.colors),
+			primary: theme.primary1,
+			background: theme.background,
+			card: theme.card,
+			text: theme.text,
+			border: theme.border,
+			notification: theme.primary2,
+		},
+	};
+
 	return (
-		<NavigationContainer theme={getNavigationTheme(theme)}>
+		<NavigationContainer theme={navTheme}>
 			<Stack.Navigator screenOptions={{ headerShown: false }}>
 				<Stack.Screen name="MainTabs" component={TabNavigator} />
 			</Stack.Navigator>
@@ -32,23 +51,27 @@ export default function App() {
 
 	useEffect(() => {
 		(async () => {
-			try {
-				await SplashScreen.preventAutoHideAsync();
-				await initDB();
-				await materializeRecurring();
-			} catch (e) {
-				console.error("App init failed:", e);
-			} finally {
-				setReady(true);
-				await SplashScreen.hideAsync();
-			}
+			// Do all your startup work while the splash is visible
+			await initDB();
+			await materializeRecurring();
+			setReady(true);
 		})();
 	}, []);
 
-	if (!ready) return null;
+	// Hide the splash *after* the first frame of your UI is laid out
+	const onLayoutRootView = useCallback(async () => {
+		if (ready) {
+			await SplashScreen.hideAsync();
+		}
+	}, [ready]);
+
+	if (!ready) {
+		// Returning null keeps the splash visible
+		return null;
+	}
 
 	return (
-		<GestureHandlerRootView style={{ flex: 1 }}>
+		<GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
 			<ThemeProvider>
 				<ThemedNavigation />
 			</ThemeProvider>

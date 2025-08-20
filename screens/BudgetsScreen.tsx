@@ -44,6 +44,10 @@ import {
 	getTransactions,
 	Transaction,
 } from "../database";
+import InlineDateWheel from "../components/InlineDateWheel";
+import { parseAmount } from "../utils/money";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { formatAmount } from "../utils/money";
 
 // --- tiny progress bar component ---
 function Progress({ value, max }: { value: number; max: number }) {
@@ -144,6 +148,21 @@ export default function BudgetsScreen({ navigation }: any) {
 	const theme = useTheme();
 	const isFocused = useIsFocused();
 
+	const SETTINGS_KEY = "finwise.settings.v1";
+	const [showCents, setShowCents] = useState(true);
+
+	useEffect(() => {
+		(async () => {
+			try {
+				const raw = await AsyncStorage.getItem(SETTINGS_KEY);
+				if (raw) {
+					const s = JSON.parse(raw);
+					if (typeof s.showCents === "boolean") setShowCents(s.showCents);
+				}
+			} catch {}
+		})();
+	}, [isFocused]);
+
 	useLayoutEffect(() => {
 		navigation?.setOptions?.({ headerShown: false });
 	}, [navigation]);
@@ -233,7 +252,7 @@ export default function BudgetsScreen({ navigation }: any) {
 	};
 
 	const save = async () => {
-		const amount = parseFloat(fAmount);
+		const amount = parseAmount(fAmount);
 		if (!fCategory.trim())
 			return Alert.alert("Validation", "Please enter a category.");
 		if (!amount || amount <= 0)
@@ -290,7 +309,7 @@ export default function BudgetsScreen({ navigation }: any) {
 						{item.category}
 					</Text>
 					<Text style={[styles.cardAmount, { color: theme.textSecondary }]}>
-						€{item.amount.toFixed(2)}
+						€{formatAmount(item.amount, showCents)}
 					</Text>
 				</View>
 
@@ -302,11 +321,12 @@ export default function BudgetsScreen({ navigation }: any) {
 					<Text style={{ color: theme.textSecondary }}>
 						Spent:{" "}
 						<Text style={{ color: over ? theme.expense : theme.text }}>
-							€{spent.toFixed(2)}
+							€{formatAmount(spent, showCents)}
 						</Text>
 					</Text>
 					<Text style={{ color: over ? theme.expense : theme.textSecondary }}>
-						{over ? "Over by" : "Remaining"}: €{Math.abs(remaining).toFixed(2)}
+						{over ? "Over by" : "Remaining"}: €
+						{formatAmount(Math.abs(remaining), showCents)}
 					</Text>
 				</View>
 
@@ -538,30 +558,12 @@ export default function BudgetsScreen({ navigation }: any) {
 
 								{/* iOS: inline spinner, clipped & centered like Recurring */}
 								{showDatePicker && Platform.OS === "ios" && (
-									<View
-										style={[
-											styles.inlinePickerBox,
-											{
-												backgroundColor: theme.background,
-												borderColor: theme.border,
-											},
-										]}
-									>
-										<DateTimePicker
-											value={fStartDate}
-											mode="date"
-											display="spinner"
-											themeVariant={
-												Appearance.getColorScheme() === "dark"
-													? "dark"
-													: "light"
-											}
-											onChange={(_, selected) => {
-												if (selected) setFStartDate(selected); // live update
-											}}
-											style={styles.iosSpinner}
-										/>
-									</View>
+									<InlineDateWheel
+										value={fStartDate}
+										onChange={setFStartDate}
+										backgroundColor={theme.background}
+										borderColor={theme.border}
+									/>
 								)}
 
 								<View

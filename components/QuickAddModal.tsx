@@ -17,12 +17,15 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme";
 import { insertTransaction } from "../database";
+import { parseAmount } from "../utils/money";
+import InlineDateWheel from "./InlineDateWheel";
 
 type Props = {
 	onClose?: () => void; // ✅ accept onClose from TabNavigator
+	onSaved?: () => void; // ✅ notify parent on successful save
 };
 
-export default function QuickAddModal({ onClose }: Props) {
+export default function QuickAddModal({ onClose, onSaved }: Props) {
 	const theme = useTheme();
 
 	const [amount, setAmount] = useState("");
@@ -44,11 +47,12 @@ export default function QuickAddModal({ onClose }: Props) {
 		if (!amount || !category) return;
 		await insertTransaction(
 			type,
-			parseFloat(amount),
+			parseAmount(amount),
 			category.trim(),
 			date.toISOString()
 		);
-		close();
+		onSaved?.(); // ✅ tell parent we added one
+		onClose?.(); // close modal
 	};
 
 	return (
@@ -102,7 +106,7 @@ export default function QuickAddModal({ onClose }: Props) {
 							]}
 							placeholder="Amount (€)"
 							placeholderTextColor={theme.textSecondary}
-							keyboardType="numeric"
+							keyboardType={Platform.OS === "ios" ? "decimal-pad" : "numeric"}
 							returnKeyType="done"
 							blurOnSubmit
 							onSubmitEditing={() => Keyboard.dismiss()}
@@ -162,28 +166,12 @@ export default function QuickAddModal({ onClose }: Props) {
 
 						{/* iOS: inline spinner (stays open) – same as Recurring */}
 						{showPicker && Platform.OS === "ios" && (
-							<View
-								style={[
-									styles.inlinePickerBox,
-									{
-										backgroundColor: theme.background,
-										borderColor: theme.border,
-									},
-								]}
-							>
-								<DateTimePicker
-									value={date}
-									mode="date"
-									display="spinner"
-									themeVariant={
-										Appearance.getColorScheme() === "dark" ? "dark" : "light"
-									}
-									onChange={(_, selected) => {
-										if (selected) setDate(selected); // live update; don't close
-									}}
-									style={styles.iosSpinner}
-								/>
-							</View>
+							<InlineDateWheel
+								value={date}
+								onChange={setDate}
+								backgroundColor={theme.background}
+								borderColor={theme.border}
+							/>
 						)}
 
 						<View

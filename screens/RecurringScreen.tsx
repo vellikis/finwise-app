@@ -43,6 +43,10 @@ import {
 	deleteRecurringRule,
 	materializeRecurring,
 } from "../database";
+import InlineDateWheel from "../components/InlineDateWheel";
+import { parseAmount } from "../utils/money";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { formatAmount } from "../utils/money";
 
 // --- date helpers ---
 function startOfDay(d: Date) {
@@ -84,6 +88,21 @@ export default function RecurringScreen({ navigation }: any) {
 	const theme = useTheme();
 	const insets = useSafeAreaInsets();
 	const isFocused = useIsFocused();
+
+	const SETTINGS_KEY = "finwise.settings.v1";
+	const [showCents, setShowCents] = useState(true);
+
+	useEffect(() => {
+		(async () => {
+			try {
+				const raw = await AsyncStorage.getItem(SETTINGS_KEY);
+				if (raw) {
+					const s = JSON.parse(raw);
+					if (typeof s.showCents === "boolean") setShowCents(s.showCents);
+				}
+			} catch {}
+		})();
+	}, [isFocused]);
 
 	useLayoutEffect(() => {
 		navigation?.setOptions?.({ headerShown: false });
@@ -140,7 +159,7 @@ export default function RecurringScreen({ navigation }: any) {
 	};
 
 	const save = async () => {
-		const amount = parseFloat(fAmount);
+		const amount = parseAmount(fAmount);
 		if (!fCategory.trim())
 			return Alert.alert("Validation", "Please enter a category.");
 		if (!amount || amount <= 0)
@@ -214,7 +233,8 @@ export default function RecurringScreen({ navigation }: any) {
 							fontWeight: "900",
 						}}
 					>
-						{item.type === "income" ? "+" : "-"}€{item.amount.toFixed(2)}
+						{item.type === "income" ? "+" : "-"}€
+						{formatAmount(item.amount, showCents)}
 					</Text>
 				</View>
 
@@ -549,30 +569,12 @@ export default function RecurringScreen({ navigation }: any) {
 
 								{/* iOS: inline spinner (stays open), single instance */}
 								{showDatePicker && Platform.OS === "ios" && (
-									<View
-										style={[
-											styles.inlinePickerBox,
-											{
-												backgroundColor: theme.background,
-												borderColor: theme.border,
-											},
-										]}
-									>
-										<DateTimePicker
-											value={fStartDate}
-											mode="date"
-											display="spinner"
-											themeVariant={
-												Appearance.getColorScheme() === "dark"
-													? "dark"
-													: "light"
-											}
-											onChange={(_, selected) => {
-												if (selected) setFStartDate(selected); // live update, don't close
-											}}
-											style={styles.iosSpinner}
-										/>
-									</View>
+									<InlineDateWheel
+										value={fStartDate}
+										onChange={setFStartDate}
+										backgroundColor={theme.background}
+										borderColor={theme.border}
+									/>
 								)}
 
 								<View

@@ -1,0 +1,16 @@
+{
+	"cli": { "version": ">= 3.13.0" },
+	"build": {
+		"production": {
+			"ios": { "image": "latest" },
+			"android": {}
+		},
+		"internal": {
+			"distribution": "internal",
+			"ios": { "simulator": false }
+		}
+	},
+	"submit": {
+		"production": {}
+	}
+}

@@ -1,3 +1,4 @@
+// screens/TransactionsScreen.tsx
 import React, {
 	useMemo,
 	useState,
@@ -19,6 +20,9 @@ import {
 	TextInput,
 	Button,
 	StatusBar,
+	RefreshControl,
+	Pressable, // ⬅️ added
+	Appearance, // ⬅️ added (for iOS spinner themeVariant)
 } from "react-native";
 import {
 	getTransactions,
@@ -35,7 +39,10 @@ import {
 	SafeAreaView,
 	useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { useTheme } from "../theme"; // <-- adjust path if needed
+import { useTheme } from "../theme";
+import { parseAmount } from "../utils/money";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { formatAmount } from "../utils/money";
 
 if (
 	Platform.OS === "android" &&
@@ -70,10 +77,27 @@ export default function TransactionsScreen({ navigation }: any) {
 	const [filter, setFilter] = useState<FilterKey>("today");
 	const [customFrom, setCustomFrom] = useState<Date | null>(null);
 	const [customTo, setCustomTo] = useState<Date | null>(null);
+
+	// Custom pickers visibility
 	const [showFromPicker, setShowFromPicker] = useState(false);
 	const [showToPicker, setShowToPicker] = useState(false);
 
 	const isFocused = useIsFocused();
+
+	const SETTINGS_KEY = "finwise.settings.v1";
+	const [showCents, setShowCents] = useState(true);
+
+	useEffect(() => {
+		(async () => {
+			try {
+				const raw = await AsyncStorage.getItem(SETTINGS_KEY);
+				if (raw) {
+					const s = JSON.parse(raw);
+					if (typeof s.showCents === "boolean") setShowCents(s.showCents);
+				}
+			} catch {}
+		})();
+	}, [isFocused]);
 
 	const load = useCallback(async () => {
 		const list = await getTransactions();
@@ -86,6 +110,14 @@ export default function TransactionsScreen({ navigation }: any) {
 	useEffect(() => {
 		if (isFocused) load();
 	}, [isFocused, load]);
+
+	// Pull-to-refresh
+	const [refreshing, setRefreshing] = useState(false);
+	const onRefresh = useCallback(async () => {
+		setRefreshing(true);
+		await load();
+		setRefreshing(false);
+	}, [load]);
 
 	const handleExpand = (id: number) => {
 		LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -125,7 +157,7 @@ export default function TransactionsScreen({ navigation }: any) {
 		await updateTransaction(
 			editingTx.id,
 			editType,
-			parseFloat(editAmount),
+			parseAmount(editAmount),
 			editCategory.trim() || "Uncategorized",
 			editDate.toISOString()
 		);
@@ -168,9 +200,29 @@ export default function TransactionsScreen({ navigation }: any) {
 		return data;
 	}, [data, filter, customFrom, customTo]);
 
-	const openCustomPickers = () => {
+	// --- NEW: unified filter handler that also hides pickers ---
+	const handleFilterPress = (key: FilterKey) => {
+		if (key !== "custom") {
+			setFilter(key);
+			// close any open custom pickers
+			setShowFromPicker(false);
+			setShowToPicker(false);
+			return;
+		}
+		// Custom: just show the range buttons; don't open any wheel yet
 		setFilter("custom");
+		setShowFromPicker(false);
+		setShowToPicker(false);
+	};
+
+	// Open range pickers
+	const openFrom = () => {
+		setShowToPicker(false);
 		setShowFromPicker(true);
+	};
+	const openTo = () => {
+		setShowFromPicker(false);
+		setShowToPicker(true);
 	};
 
 	const renderRightActions = (id: number) => (
@@ -222,7 +274,7 @@ export default function TransactionsScreen({ navigation }: any) {
 						numberOfLines={1}
 						adjustsFontSizeToFit
 					>
-						{isIncome ? "+" : "-"}€{item.amount.toFixed(2)}
+						{isIncome ? "+" : "-"}€{formatAmount(item.amount, showCents)}
 					</Text>
 				</View>
 			</TouchableOpacity>
@@ -311,7 +363,7 @@ export default function TransactionsScreen({ navigation }: any) {
 				{(["today", "week", "month"] as FilterKey[]).map(key => (
 					<TouchableOpacity
 						key={key}
-						onPress={() => setFilter(key)}
+						onPress={() => handleFilterPress(key)} // ⬅️ use new handler
 						style={[
 							styles.filterChip,
 							{ backgroundColor: theme.card, borderColor: theme.border },
@@ -332,7 +384,7 @@ export default function TransactionsScreen({ navigation }: any) {
 					</TouchableOpacity>
 				))}
 				<TouchableOpacity
-					onPress={openCustomPickers}
+					onPress={() => handleFilterPress("custom")} // ⬅️ use new handler
 					style={[
 						styles.filterChip,
 						{ backgroundColor: theme.card, borderColor: theme.border },
@@ -354,11 +406,11 @@ export default function TransactionsScreen({ navigation }: any) {
 				</TouchableOpacity>
 			</View>
 
-			{/* Custom range pickers */}
+			{/* Custom range buttons */}
 			{filter === "custom" && (
 				<View style={styles.customRangeRow}>
 					<TouchableOpacity
-						onPress={() => setShowFromPicker(true)}
+						onPress={openFrom}
 						style={[
 							styles.rangeBtn,
 							{ borderColor: theme.border, backgroundColor: theme.card },
@@ -369,7 +421,7 @@ export default function TransactionsScreen({ navigation }: any) {
 						</Text>
 					</TouchableOpacity>
 					<TouchableOpacity
-						onPress={() => setShowToPicker(true)}
+						onPress={openTo}
 						style={[
 							styles.rangeBtn,
 							{ borderColor: theme.border, backgroundColor: theme.card },
@@ -412,9 +464,18 @@ export default function TransactionsScreen({ navigation }: any) {
 						</Text>
 					</View>
 				}
+				refreshControl={
+					<RefreshControl
+						refreshing={refreshing}
+						onRefresh={onRefresh}
+						tintColor={theme.text}
+						colors={[theme.primary1 ?? "#6366F1"]}
+						progressBackgroundColor={theme.card}
+					/>
+				}
 			/>
 
-			{/* Edit Modal */}
+			{/* Edit Modal (unchanged) */}
 			<Modal
 				visible={editModalVisible}
 				transparent
@@ -517,28 +578,89 @@ export default function TransactionsScreen({ navigation }: any) {
 				</View>
 			</Modal>
 
-			{/* Custom date pickers */}
-			{showFromPicker && (
+			{/* --- ANDROID custom range pickers (native dialogs) --- */}
+			{showFromPicker && Platform.OS === "android" && (
 				<DateTimePicker
 					value={customFrom ?? new Date()}
 					mode="date"
-					display={Platform.OS === "ios" ? "spinner" : "default"}
-					onChange={(_, selected) => {
+					display="default"
+					onChange={(event, selected) => {
 						setShowFromPicker(false);
-						if (selected) setCustomFrom(startOfDay(selected));
+						if (event.type === "set" && selected)
+							setCustomFrom(startOfDay(selected));
 					}}
 				/>
 			)}
-			{showToPicker && (
+			{showToPicker && Platform.OS === "android" && (
 				<DateTimePicker
 					value={customTo ?? new Date()}
 					mode="date"
-					display={Platform.OS === "ios" ? "spinner" : "default"}
-					onChange={(_, selected) => {
+					display="default"
+					onChange={(event, selected) => {
 						setShowToPicker(false);
-						if (selected) setCustomTo(startOfDay(selected));
+						if (event.type === "set" && selected)
+							setCustomTo(startOfDay(selected));
 					}}
 				/>
+			)}
+
+			{/* --- iOS custom range pickers (bottom sheet with Done) --- */}
+			{Platform.OS === "ios" && (showFromPicker || showToPicker) && (
+				<Modal
+					visible
+					transparent
+					animationType="fade"
+					onRequestClose={() => {
+						setShowFromPicker(false);
+						setShowToPicker(false);
+					}}
+				>
+					<View style={styles.centerOverlay}>
+						<View
+							style={[
+								styles.centerCard,
+								{ backgroundColor: theme.card, borderColor: theme.border },
+							]}
+						>
+							<View
+								style={[styles.centerHeader, { borderColor: theme.border }]}
+							>
+								<Text style={{ color: theme.textSecondary, fontWeight: "600" }}>
+									{showFromPicker ? "From date" : "To date"}
+								</Text>
+								<TouchableOpacity
+									onPress={() => {
+										setShowFromPicker(false);
+										setShowToPicker(false);
+									}}
+								>
+									<Text style={{ color: theme.primary2, fontWeight: "800" }}>
+										Done
+									</Text>
+								</TouchableOpacity>
+							</View>
+
+							<DateTimePicker
+								value={
+									showFromPicker
+										? customFrom ?? new Date()
+										: customTo ?? new Date()
+								}
+								mode="date"
+								display="spinner"
+								themeVariant={
+									Appearance.getColorScheme() === "dark" ? "dark" : "light"
+								}
+								onChange={(_, selected) => {
+									if (!selected) return;
+									if (showFromPicker) setCustomFrom(startOfDay(selected));
+									else setCustomTo(startOfDay(selected));
+								}}
+								style={styles.iosSpinner}
+							/>
+						</View>
+					</View>
+				</Modal>
 			)}
 		</SafeAreaView>
 	);
@@ -638,10 +760,7 @@ const styles = StyleSheet.create({
 		marginTop: 8,
 	},
 	pillBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999 },
-
-	pillBtnText: {
-		fontWeight: "800",
-	},
+	pillBtnText: { fontWeight: "800" },
 
 	deleteAction: {
 		justifyContent: "center",
@@ -650,7 +769,6 @@ const styles = StyleSheet.create({
 		borderRadius: 16,
 		marginVertical: 5,
 	},
-
 	deleteActionText: { color: "#fff", marginTop: 4, fontWeight: "800" },
 
 	modalOverlay: {
@@ -687,5 +805,34 @@ const styles = StyleSheet.create({
 		borderRadius: 10,
 		alignItems: "center",
 		marginBottom: 14,
+	},
+
+	// iOS bottom sheet for custom pickers
+	centerOverlay: {
+		flex: 1,
+		backgroundColor: "rgba(0,0,0,0.4)",
+		justifyContent: "center",
+		alignItems: "center",
+		paddingHorizontal: 16,
+	},
+	centerCard: {
+		width: "92%",
+		maxWidth: 520,
+		borderRadius: 16,
+		borderWidth: 1,
+		overflow: "hidden",
+	},
+	centerHeader: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		paddingHorizontal: 14,
+		paddingVertical: 10,
+		borderBottomWidth: 1,
+	},
+	iosSpinner: {
+		width: "100%",
+		alignSelf: "stretch",
+		height: 216,
 	},
 });

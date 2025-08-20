@@ -1,146 +1,134 @@
-// theme.tsx
+// theme.ts
 import React, {
 	createContext,
 	useContext,
+	useEffect,
 	useMemo,
 	useState,
-	ReactNode,
 } from "react";
 import { useColorScheme } from "react-native";
-import {
-	DefaultTheme,
-	DarkTheme,
-	Theme as NavigationTheme,
-} from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// ---- COLOR PALETTES ----
-// Updated to match HomeScreen's exact colors and add a few "on*" helpers.
-export const lightColors = {
-	// Base
-	background: "#F9FAFB", // was COLORS.bg
-	card: "#ffffff",
-	text: "#181A20",
-	textSecondary: "#6B7280",
-	border: "#E3E6ED",
+export type ThemeMode = "light" | "dark" | "system";
 
-	// Brand / primary
-	primary: "#4F46E5",
-	primary1: "#6366F1", // gradient end (was COLORS.primary1)
-	primary2: "#4F46E5", // gradient start (was COLORS.primary2)
-	onPrimary: "#ffffff",
+type Theme = {
+	isDark: boolean;
+	background: string;
+	card: string;
+	text: string;
+	textSecondary: string;
+	border: string;
 
-	// Accents
-	accent: "#FFB800",
+	primary1: string;
+	primary2: string;
+	onPrimary: string;
 
-	// Finance
-	income: "#10B981", // exact match
-	expense: "#EF4444", // exact match
+	income: string;
+	expense: string;
 
-	// Tips box gradient + text
-	tipBg1: "#F0FDF4",
-	tipBg2: "#D1FAE5",
-	tipTextPrimary: "#065F46",
-	tipTextSecondary: "#047857",
+	tipBg1: string;
+	tipBg2: string;
+	tipTextPrimary: string;
+	tipTextSecondary: string;
+
+	// (optional extras you referenced)
+	primary?: string;
+	primarySoft?: string;
 };
 
-export const darkColors = {
-	// Dark base
-	background: "#181A20",
-	card: "#232946",
-	text: "#ffffff",
-	textSecondary: "#B0B7C3",
-	border: "#232946",
+const light: Theme = {
+	isDark: false,
+	background: "#F7F8FA",
+	card: "#FFFFFF",
+	text: "#111827",
+	textSecondary: "#6B7280",
+	border: "#E5E7EB",
 
-	// Brand / primary (keep same hues for consistency)
-	primary: "#4F46E5",
 	primary1: "#6366F1",
 	primary2: "#4F46E5",
-	onPrimary: "#ffffff",
+	onPrimary: "#FFFFFF",
 
-	// Accents
-	accent: "#FFB800",
-
-	// Finance (keep same greens/reds so meaning is consistent)
 	income: "#10B981",
 	expense: "#EF4444",
 
-	// Tips box gradient + text (use subtler dark-friendly greens)
-	tipBg1: "#10231b",
-	tipBg2: "#163024",
-	tipTextPrimary: "#B7F9D0",
-	tipTextSecondary: "#A0EEC4",
+	tipBg1: "#EEF2FF",
+	tipBg2: "#E0E7FF",
+	tipTextPrimary: "#111827",
+	tipTextSecondary: "#374151",
+
+	primary: "#6366F1",
+	primarySoft: "#EEF2FF",
 };
 
-// ---- THEME TYPES ----
-export type ThemeMode = "system" | "light" | "dark";
-export type AppTheme = typeof lightColors;
+const dark: Theme = {
+	isDark: true,
+	background: "#0B0F14",
+	card: "#131A22",
+	text: "#F9FAFB",
+	textSecondary: "#93A3B5",
+	border: "#293241",
 
-interface ThemeContextProps {
-	theme: AppTheme;
-	mode: ThemeMode;
-	setMode: (mode: ThemeMode) => void;
-}
+	primary1: "#6366F1",
+	primary2: "#4F46E5",
+	onPrimary: "#FFFFFF",
 
-// ---- CONTEXT ----
-const ThemeContext = createContext<ThemeContextProps>({
-	theme: lightColors,
+	income: "#22C55E",
+	expense: "#F87171",
+
+	tipBg1: "#1B2230",
+	tipBg2: "#1F2940",
+	tipTextPrimary: "#F9FAFB",
+	tipTextSecondary: "#93A3B5",
+
+	primary: "#6366F1",
+	primarySoft: "#1B2230",
+};
+
+type ThemeModeCtx = { mode: ThemeMode; setMode: (m: ThemeMode) => void };
+const ThemeContext = createContext<Theme>(light);
+const ThemeModeContext = createContext<ThemeModeCtx>({
 	mode: "system",
 	setMode: () => {},
 });
 
-// ---- PROVIDER ----
-export function ThemeProvider({ children }: { children: ReactNode }) {
-	const systemScheme = useColorScheme(); // "light" | "dark"
+const MODE_KEY = "finwise.themeMode.v1";
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+	const system = useColorScheme(); // 'light' | 'dark' | null
 	const [mode, setMode] = useState<ThemeMode>("system");
 
-	const theme = useMemo(() => {
-		if (mode === "light") return lightColors;
-		if (mode === "dark") return darkColors;
-		return systemScheme === "dark" ? darkColors : lightColors;
-	}, [mode, systemScheme]);
+	// load saved mode once
+	useEffect(() => {
+		(async () => {
+			const saved = await AsyncStorage.getItem(MODE_KEY);
+			if (saved === "light" || saved === "dark" || saved === "system")
+				setMode(saved);
+		})();
+	}, []);
 
-	const contextValue = useMemo(
-		() => ({
-			theme,
-			mode,
-			setMode,
-		}),
-		[theme, mode]
+	// persist mode
+	useEffect(() => {
+		AsyncStorage.setItem(MODE_KEY, mode).catch(() => {});
+	}, [mode]);
+
+	const effective = mode === "system" ? system ?? "light" : mode;
+	const theme = useMemo(
+		() => (effective === "dark" ? dark : light),
+		[effective]
 	);
+
+	const modeCtx = useMemo(() => ({ mode, setMode }), [mode]);
 
 	return (
-		<ThemeContext.Provider value={contextValue}>
-			{children}
-		</ThemeContext.Provider>
+		<ThemeModeContext.Provider value={modeCtx}>
+			<ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>
+		</ThemeModeContext.Provider>
 	);
 }
 
-// ---- HOOKS ----
 export function useTheme() {
-	return useContext(ThemeContext).theme;
+	return useContext(ThemeContext);
 }
-
 export function useThemeMode() {
-	const ctx = useContext(ThemeContext);
-	return {
-		mode: ctx.mode,
-		setMode: ctx.setMode,
-	};
-}
-
-// ---- REACT NAVIGATION THEME MAPPER ----
-export function getNavigationTheme(theme: AppTheme): NavigationTheme {
-	const base = theme === darkColors ? DarkTheme : DefaultTheme;
-	return {
-		...base,
-		colors: {
-			...base.colors,
-			background: theme.background,
-			card: theme.card,
-			primary: theme.primary,
-			text: theme.text,
-			border: theme.border,
-			notification: theme.accent,
-		},
-	};
+	return useContext(ThemeModeContext);
 }
