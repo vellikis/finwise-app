@@ -46,19 +46,15 @@ Track transactions, set budgets, create recurring rules, and tweak a few thought
 ## 🚀 Getting Started
 
 ### 1) Clone the repo
-`bash
-git clone https://github.com/vellikis/finwise-app.git
+`git clone https://github.com/vellikis/finwise-app.git
 cd finwise-app`
 
 ### 2) Install dependencies
-`bash 
-npm install`
+` npm install`
 If you need the optional packages used by Settings features:
-`bash
-npx expo install expo-local-authentication expo-notifications expo-file-system expo-sharing expo-constants @react-native-async-storage/async-storage @react-native-community/datetimepicker`
+`npx expo install expo-local-authentication expo-notifications expo-file-system expo-sharing expo-constants @react-native-async-storage/async-storage @react-native-community/datetimepicker`
 ### 3) Run the app (Expo)
-`bash 
-npx expo start`
+` npx expo start`
 Press i to run iOS Simulator (macOS), a for Android emulator,
 or scan the QR with the Expo Go app on a device.
 
@@ -87,7 +83,7 @@ expo-file-system + expo-sharing (CSV export)
 @react-native-community/datetimepicker (date/time pickers)
 
 ## 📁 Project Structure (high-level)
-.
+`.
 ├─ App.tsx
 ├─ app.json
 ├─ navigation/
@@ -104,50 +100,50 @@ expo-file-system + expo-sharing (CSV export)
 │  └─ index.ts (initDB, CRUD, materializeRecurring, etc.)
 ├─ theme.ts (ThemeProvider, useTheme, useThemeMode)
 └─ utils/
-   └─ money.ts (formatAmount helper)
+   └─ money.ts (formatAmount helper)`
 
 ⚙️ Useful Scripts
 # Start Metro / Expo
-npx expo start
+`npx expo start`
 
 # Run on Android (emulator)
-npx expo run:android
+`npx expo run:android`
 
 # Run on iOS (simulator; macOS only)
-npx expo run:ios
+`npx expo run:ios`
 
-🔒 iOS / Android Notes
+## 🔒 iOS / Android Notes
 
 System Theme: Ensure app.json has:
 
-{ "expo": { "userInterfaceStyle": "automatic" } }
+`{ "expo": { "userInterfaceStyle": "automatic" } }`
 
 
-Notifications: On iOS, test on a physical device for scheduled alerts.
+- Notifications: On iOS, test on a physical device for scheduled alerts.
 
-Biometrics: Requires Face ID/Touch ID/Android biometrics configured on device.
+- Biometrics: Requires Face ID/Touch ID/Android biometrics configured on device.
 
-🧾 CSV Export
+## 🧾 CSV Export
 
 Exports open the system share sheet where available. If sharing isn’t available, files are written to Expo’s cache directory and an alert shows the path.
 
-🧰 Troubleshooting
+## 🧰 Troubleshooting
 
 CRLF warnings on Windows: It’s safe. To normalize:
 
-git config core.autocrlf true
+`git config core.autocrlf true`
 
 
-New transactions not visible immediately: The list auto-refreshes when the screen regains focus and via pull-to-refresh. If you modified DB helpers, ensure they resolve successfully.
+- New transactions not visible immediately: The list auto-refreshes when the screen regains focus and via pull-to-refresh. If you modified DB helpers, ensure they resolve successfully.
 
-🤝 Contributing
+## 🤝 Contributing
 
 Pull requests welcome!
 Find a bug or want a small improvement? Open an issue.
 
-📜 License
+## 📜 License
 
 MIT
 
-Made with 💸 by Alex
+Made by Evan
 
