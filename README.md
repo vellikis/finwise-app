@@ -83,6 +83,8 @@ expo-file-system + expo-sharing (CSV export)
 @react-native-community/datetimepicker (date/time pickers)
 
 ## 📁 Project Structure (high-level)
+
+```text
 .
 ├─ App.tsx
 ├─ app.json
@@ -97,10 +99,11 @@ expo-file-system + expo-sharing (CSV export)
 ├─ components/
 │  └─ QuickAddModal.tsx
 ├─ database/
-│  └─ index.ts (initDB, CRUD, materializeRecurring, etc.)
-├─ theme.ts (ThemeProvider, useTheme, useThemeMode)
+│  └─ index.ts   # initDB, CRUD, materializeRecurring, etc.
+├─ theme.ts      # ThemeProvider, useTheme, useThemeMode
 └─ utils/
-   └─ money.ts (formatAmount helper)
+   └─ money.ts   # formatAmount helper  
+```
 
 ## ⚙️ Useful Scripts
 - Start Metro / Expo
