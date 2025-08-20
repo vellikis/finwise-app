@@ -1,96 +1,78 @@
-FinWise – Personal Finance (React Native + Expo)
+# FinWise – Personal Finance (React Native + Expo)
 
-A tidy, portfolio-friendly budgeting app built with React Native + Expo.
+A tidy, portfolio-friendly budgeting app built with **React Native + Expo**.  
 Track transactions, set budgets, create recurring rules, and tweak a few thoughtful settings — all in a clean, mobile-first UI.
 
-✨ Features
+---
 
-Transactions
+## ✨ Features
 
-Quick Add modal (floating + button)
+- **Transactions**
+  - Quick Add modal (floating + button)
+  - Swipe to delete, tap to expand, inline edit
+  - Filters: Today / Week / Month / Custom range
+  - Pull-to-refresh & auto-refresh on focus
 
-Swipe to delete, tap to expand, inline edit
+- **Budgets**
+  - Weekly / Monthly budgets with progress bars
+  - Anchor start date (polished iOS date wheel on iOS)
 
-Filters: Today / Week / Month / Custom range
+- **Recurring**
+  - Daily / Weekly / Monthly rules
+  - “Run due” action & automatic materialization
 
-Pull-to-refresh & auto-refresh on focus
+- **Home**
+  - At-a-glance income/expense cards
+  - Handy quick-action tiles
+  - Friendly welcome + tip section
 
-Budgets
+- **Settings**
+  - Theme: **Light / Dark / System**
+  - **Show cents** toggle
+  - **App Lock**: Biometric / Passcode (passcode is placeholder for demo)
+  - **Auto-lock after**: 30s / 1m / 5m
+  - **Daily reminder** (time picker) via `expo-notifications`
+  - **Export CSV**: Transactions / Budgets / Recurring
+  - **Reset all data** (guarded placeholder)
+  - “About & Support” stubs
 
-Weekly / Monthly budgets with progress bars
+- **Tech niceties**
+  - SQLite via `expo-sqlite`
+  - Themed React Navigation (colors adapt to theme)
+  - iOS “spinner” date wheel where it matters
 
-Anchor start date (polished iOS date wheel on iOS)
+---
 
-Recurring
+## 🚀 Getting Started
 
-Daily / Weekly / Monthly rules
-
-“Run due” action & automatic materialization
-
-Home
-
-At-a-glance income/expense cards
-
-Handy quick-action tiles
-
-Friendly welcome + tip section
-
-Settings
-
-Theme: Light / Dark / System
-
-Show cents toggle
-
-App Lock: Biometric / Passcode (passcode is placeholder for demo)
-
-Auto-lock after: 30s / 1m / 5m
-
-Daily reminder (time picker) via expo-notifications
-
-Export CSV: Transactions / Budgets / Recurring
-
-Reset all data (guarded placeholder)
-
-“About & Support” stubs
-
-Tech niceties
-
-SQLite via expo-sqlite
-
-Themed React Navigation (colors adapt to theme)
-
-iOS “spinner” date wheel where it matters
-
-🚀 Getting Started
-1) Clone the repo
+### 1) Clone the repo
+`bash
 git clone https://github.com/vellikis/finwise-app.git
-cd finwise-app
+cd finwise-app`
 
-2) Install dependencies
-npm install
+### 2) Install dependencies
+`bash 
+npm install`
+If you need the optional packages used by Settings features:
+`bash
+npx expo install expo-local-authentication expo-notifications expo-file-system expo-sharing expo-constants @react-native-async-storage/async-storage @react-native-community/datetimepicker`
+### 3) Run the app (Expo)
+`bash 
+npx expo start`
+Press i to run iOS Simulator (macOS), a for Android emulator,
+or scan the QR with the Expo Go app on a device.
 
+## 🧩 Tech Stack
 
-Optional packages used by Settings features:
+- React Native + Expo
 
-npx expo install expo-local-authentication expo-notifications expo-file-system expo-sharing expo-constants @react-native-async-storage/async-storage @react-native-community/datetimepicker
+- TypeScript
 
-3) Run the app (Expo)
-npx expo start
+- SQLite (expo-sqlite)
 
+- React Navigation
 
-Press i to run iOS Simulator (macOS), a for Android emulator, or scan the QR with the Expo Go app on a device.
-
-🧩 Tech Stack
-
-React Native + Expo
-
-TypeScript
-
-SQLite (expo-sqlite)
-
-React Navigation
-
-@expo/vector-icons
+**@expo/vector-icons`
 
 Optional / used in features:
 
@@ -104,7 +86,7 @@ expo-file-system + expo-sharing (CSV export)
 
 @react-native-community/datetimepicker (date/time pickers)
 
-📁 Project Structure (high-level)
+## 📁 Project Structure (high-level)
 .
 ├─ App.tsx
 ├─ app.json
@@ -168,3 +150,4 @@ Find a bug or want a small improvement? Open an issue.
 MIT
 
 Made with 💸 by Alex
+
