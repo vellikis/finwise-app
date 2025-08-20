@@ -409,7 +409,6 @@ export default function BudgetsScreen({ navigation }: any) {
 				}
 				ListEmptyComponent={
 					<View style={{ alignItems: "center", marginTop: 60 }}>
-						{ListControls}
 						<Text style={{ fontSize: 48, marginTop: 16 }}>🧮</Text>
 						<Text
 							style={{

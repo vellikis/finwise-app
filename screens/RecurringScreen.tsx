@@ -394,7 +394,6 @@ export default function RecurringScreen({ navigation }: any) {
 				}
 				ListEmptyComponent={
 					<View style={{ alignItems: "center", marginTop: 40 }}>
-						{ListControls}
 						<Text style={{ fontSize: 48, marginTop: 16 }}>🔁</Text>
 						<Text
 							style={{
@@ -414,8 +413,7 @@ export default function RecurringScreen({ navigation }: any) {
 								textAlign: "center",
 							}}
 						>
-							Use “New rule” to create one. Your global + button keeps adding
-							transactions as usual.
+							Use “New rule” to create one.
 						</Text>
 					</View>
 				}
